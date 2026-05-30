@@ -98,6 +98,7 @@ type ItemContent struct {
 	FromTaskType           string     `json:"from_task_type,omitempty"`
 	ManualWebSearchEnabled bool       `json:"manual_web_search_enabled,omitempty"` // 网页搜索
 	UseModel               string     `json:"use_model,omitempty"`
+	ChatModel              string     `json:"chat_model,omitempty"`
 	FileInfos              []FileInfo `json:"file_infos,omitempty"`
 }
 
@@ -459,9 +460,18 @@ func ChatGPTToMonica(cfg *config.Config, chatReq openai.ChatCompletionRequest) (
 	}
 
 	// 构建请求
+	botUID := modelToBot(chatReq.Model)
+	taskType := "chat"
+
+	// gpt-5.4-mini 需要使用 Monica 官方的请求格式
+	if chatReq.Model == "gpt-5.4-mini" {
+		botUID = "monica"
+		taskType = "chat_with_custom_bot"
+	}
+
 	mReq := &MonicaRequest{
 		TaskUID: fmt.Sprintf("task:%s", uuid.New().String()),
-		BotUID:  modelToBot(chatReq.Model),
+		BotUID:  botUID,
 		Data: DataField{
 			ConversationID:  conversationID,
 			Items:           items,
@@ -472,7 +482,14 @@ func ChatGPTToMonica(cfg *config.Config, chatReq openai.ChatCompletionRequest) (
 			UseNewMemory:    false,
 		},
 		Language: "auto",
-		TaskType: "chat",
+		TaskType: taskType,
+	}
+
+	// 为 gpt-5.4-mini 的每条消息添加 chat_model 字段
+	if chatReq.Model == "gpt-5.4-mini" {
+		for i := range mReq.Data.Items {
+			mReq.Data.Items[i].Data.ChatModel = "gpt_5_4_mini"
+		}
 	}
 
 	// indent, err := json.MarshalIndent(mReq, "", "  ")
